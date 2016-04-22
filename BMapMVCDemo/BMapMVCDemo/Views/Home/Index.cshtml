@@ -1,0 +1,224 @@
+﻿<script type="text/javascript" src="http://api.map.baidu.com/api?v=2.0&ak=0wNFYikoIux228n4ytzOQCR1"></script>
+<script type="text/javascript" src="http://api.map.baidu.com/library/MarkerClusterer/1.2/src/MarkerClusterer_min.js"></script>
+<script type="text/javascript" src="http://api.map.baidu.com/library/TextIconOverlay/1.2/src/TextIconOverlay_min.js"></script>
+<div class="container-fluid">
+    <div class="row-fluid">
+        <div class="col-xs-12  span12">
+            <div class="row-fluid">
+                <div class="col-xs-3 span3">
+                    <input id="suggestId" class="input-medium search-query" type="text" />
+                </div>
+                <div class="col-xs-3 span3">
+                    <button onclick="loadBackendData()" class="btn" type="button">加载后台数据</button>
+                </div>
+                <div class="col-xs-3 span3">
+                    <button onclick="remove_overlay()" class="btn" type="button">清除地图标点</button>
+                </div>
+                <div class="col-xs-3 span3">
+                    <button onclick="getclickpoint()" class="btn" type="button">拾取坐标</button>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="row-fluid">
+        <div class="col-xs-12  span12">
+            <div id="allmap" style="overflow: hidden; zoom: 1; position: relative;">
+            </div>
+            <div id="searchResultPanel" style="border:1px solid #C0C0C0;width:150px;height:auto; display:none;"></div>
+        </div>
+    </div>
+</div>
+<script>
+    //map
+    //初始化地图缩放级别
+    var map = new BMap.Map("allmap", { minZoom: 5, maxZoom: 18 });
+    //加载地图控件
+    var ctrl_nav = new BMap.NavigationControl({ anchor: BMAP_ANCHOR_BOTTOM_RIGHT, type: BMAP_NAVIGATION_CONTROL_LARGE });
+    map.addControl(ctrl_nav);
+    //开启鼠标滚轮
+    map.enableScrollWheelZoom(true);
+    //设置定位中心和放大级别
+    map.centerAndZoom("西安", 5.5);
+    $("#allmap").css("height", $(window).height());
+    //设置地图边界，边界设置后需要微调显示级别和中心点，否则会有抖动的bug
+    //var b = new BMap.Bounds(new BMap.Point(50.000000, 10.000000), new BMap.Point(170.000000, 60.000000));
+    //BMapLib.AreaRestriction.setBounds(map, b);
+    //function
+    function getclickpoint() {
+        map.addEventListener("click", function (e) {
+            alert(e.point.lng + "," + e.point.lat);
+        });
+
+    }
+    //清除所有地图覆盖物
+    function remove_overlay() {
+        map.clearOverlays();
+    }
+    //特别显示某地区的边界
+    function getBoundary(city) {
+        var bdary = new BMap.Boundary();
+        bdary.get(city, function (rs) {
+            var count = rs.boundaries.length;
+            for (var i = 0; i < count; i++) {
+                var ply = new BMap.Polygon(rs.boundaries[i], { strokeWeight: 2, strokeColor: "#ff0000", fillColor: "" });
+                map.addOverlay(ply);
+                map.setViewport(ply.getPath());
+            }
+        });
+    }
+    //加载后台数据，并在地图显示
+    function loadData() {
+        $.getJSON('@Url.Action("JsonAllDeviceView", "Home")' , { "resultType": "json" }, function (data) {
+            remove_overlay();
+            if (data != null) {
+                for (x in data) {
+                    var iconImg = createIcon(data[x].errorLevel);
+                    console.log(data[x].errorLevel);
+                    var point = new BMap.Point(data[x].x, data[x].y);
+                    var marker = new BMap.Marker(point, { icon: iconImg });
+                    var label = new BMap.Label(data[x].deviceName, { "offset": new BMap.Size(13, -20) });
+                    marker.setLabel(label);
+                    label.setStyle({
+                        display: "none",
+                        fontSize: "16px",
+                        backgroundColor: "0.05",
+                        border: "0",
+                        fontWeight: "bold",
+                        cursor: "pointer",
+                        margin: "0px",
+                        padding: "0px"
+                    });
+                    marker.addEventListener("click", markClickEvent);
+                    map.addOverlay(marker);
+                    if (data.length == 1) {
+                        map.centerAndZoom(new BMap.Point(data[x].x, data[x].y), 14);
+                    }
+                }
+            }
+
+        });
+    }
+    //地图点的点击事件
+    function markClickEvent(e) {
+        var p = e.target;
+        if (p instanceof BMap.Marker) {
+            var label = p.getLabel();
+            alert("click:" + label.content);
+        }
+    }
+    // 查询后台数据
+    function loadBackendData() {
+        loadData();
+        setInterval(loadData, 120000);
+    }
+    //创建地图信息窗口
+    function createInfoWindow(errorlevel, deviceid, devicename, deviceinfo) {
+        switch (errorlevel) {
+            case '1':
+                {
+                    var iw = new BMap.InfoWindow("<b class='iw_poi_title' title='" + devicename + "'>" + "<a style='color:green;text-decoration:none' target='_self' href='GSRegionMap/stageview?stageid=10&projectid=157&organizeid=126'>" + devicename + "(正常)</a>" + "</b><div class='iw_poi_content'>" + deviceinfo + "</div>");
+                }
+                break;
+            case '2':
+                {
+                    var iw = new BMap.InfoWindow("<b class='iw_poi_title' title='" + devicename + "'>" + "<a style='color:yellow;text-decoration:none' target='_self' href='DataCenter'>" + devicename + "(停止)</a>" + "</b><div class='iw_poi_content'>" + deviceinfo + "</div>");
+                }
+                break;
+            case '3':
+                {
+                    var iw = new BMap.InfoWindow("<b class='iw_poi_title' title='" + devicename + "'>" + "<a style='color:red;text-decoration:none' target='_self' href='DataCenter'>" + devicename + "(故障)</a>" + "</b><div class='iw_poi_content'>" + deviceinfo + "</div>");
+                }
+                break;
+            case '4':
+                {
+                    var iw = new BMap.InfoWindow("<b class='iw_poi_title' title='" + devicename + "'>" + "<a style='color:gray;text-decoration:none' target='_self' href='DataCenter'>" + devicename + "(断线)</a>" + "</b><div class='iw_poi_content'>" + deviceinfo + "</div>");
+                }
+                break;
+            default:
+                {
+                    var iw = new BMap.InfoWindow("<b class='iw_poi_title' title='" + devicename + "'>" + "<a style='color:green;text-decoration:none' target='_self' href='DataCenter'>" + devicename + "(未知)</a>" + "</b><div class='iw_poi_content'>" + deviceinfo + "</div>");
+                }
+                return icon;
+        }
+        return iw;
+    }
+    //根据设备故障级别创建地图标记图标
+    function createIcon(errorlevel) {
+        switch (errorlevel) {
+            case 1:
+                {
+                    var icon = new BMap.Icon("Content/images/marker_green_sprite.png", new BMap.Size(30, 35))
+                }
+                break;
+            case 2:
+                {
+                    var icon = new BMap.Icon("Content/images/marker_yellow_sprite.png", new BMap.Size(30, 35))
+                }
+                break;
+            case 3:
+                {
+                    var icon = new BMap.Icon("Content/images/marker_red_sprite.png", new BMap.Size(30, 35))
+                }
+                break;
+            case 4:
+                {
+                    var icon = new BMap.Icon("Content/images/marker_gray_sprite.png", new BMap.Size(30, 35))
+                }
+                break;
+            default:
+                {
+                    var icon = new BMap.Icon("Content/images/marker_gray_sprite.png", new BMap.Size(30, 35))
+                }
+        }
+        return icon;
+    }
+    //查询
+    function G(id) {
+        return document.getElementById(id);
+    }
+    var ac = new BMap.Autocomplete(    //建立一个自动完成的对象
+		{
+		    "input": "suggestId"
+		, "location": map
+		});
+
+    ac.addEventListener("onhighlight", function (e) {  //鼠标放在下拉列表上的事件
+        var str = "";
+        var _value = e.fromitem.value;
+        var value = "";
+        if (e.fromitem.index > -1) {
+            value = _value.province + _value.city + _value.district + _value.street + _value.business;
+        }
+        str = "FromItem<br />index = " + e.fromitem.index + "<br />value = " + value;
+
+        value = "";
+        if (e.toitem.index > -1) {
+            _value = e.toitem.value;
+            value = _value.province + _value.city + _value.district + _value.street + _value.business;
+        }
+        str += "<br />ToItem<br />index = " + e.toitem.index + "<br />value = " + value;
+        G("searchResultPanel").innerHTML = str;
+    });
+
+    var myValue;
+    ac.addEventListener("onconfirm", function (e) {    //鼠标点击下拉列表后的事件
+        var _value = e.item.value;
+        myValue = _value.province + _value.city + _value.district + _value.street + _value.business;
+        G("searchResultPanel").innerHTML = "onconfirm<br />index = " + e.item.index + "<br />myValue = " + myValue;
+
+        setPlace();
+    });
+
+    function setPlace() {
+        map.clearOverlays();    //清除地图上所有覆盖物
+        function myFun() {
+            var pp = local.getResults().getPoi(0).point;    //获取第一个智能搜索的结果
+            map.centerAndZoom(pp, 18);
+            map.addOverlay(new BMap.Marker(pp));    //添加标注
+        }
+        var local = new BMap.LocalSearch(map, { //智能搜索
+            onSearchComplete: myFun
+        });
+        local.search(myValue);
+    }
+</script>
